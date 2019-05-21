@@ -1,5 +1,6 @@
 package com.huban360.wechatmsg.server;
 
+import com.alibaba.fastjson.JSONObject;
 import com.huban360.wechatmsg.bean.DataAll;
 import com.huban360.wechatmsg.bean.WxJson;
 import com.huban360.wechatmsg.dao.MongoDBDao;
@@ -10,10 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.xml.bind.JAXBException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 
 /**
@@ -32,8 +30,23 @@ public class WchatMsgService {
     public void main() {
         MongoDBDao dao = new MongoDBDao();
         //获取当天的数据
-        List<DataAll> list = dao.findWechatData(Util.mathDate(new Date(),0),Util.mathDate(new Date(),1),"");
+        List<DataAll> list = dao.findWechatData(Util.mathDate(new Date(),-1),Util.mathDate(new Date(),1),"");
+        LOG.info(JSONObject.toJSONString(list));
+        StringBuilder sb = new StringBuilder();
+        List<HashMap<String,String>> listall = new ArrayList<>();
         for (DataAll dataAll: list) {
+            HashMap<String,String> senMsg = new HashMap<>();
+            senMsg.put("店铺名称",dataAll.getShopName());
+            senMsg.put("手机号",dataAll.getLoginMobile());
+            senMsg.put("今日登录用户个数",dataAll.getTodayUser());
+            senMsg.put("用户总个数",dataAll.getTotalUser());
+            senMsg.put("命中消息个数",dataAll.getTodayHit());
+            senMsg.put("捕获消息总个数",dataAll.getTodayMsg());
+            senMsg.put("今天命中消息总价值",dataAll.getTotalPrice());
+            senMsg.put("效率最高的用户命中个数",dataAll.getHitCount());
+            senMsg.put("效率最高的用户",dataAll.getEfficientUser());
+            senMsg.put("登录时间最长的用户",dataAll.getLongestUser());
+            senMsg.put("店铺平均登录时长",dataAll.getHours());
             WxJson wxJson = new WxJson();
             wxJson.addMiniprogram("小程序id","小程序跳转路径");
             //判断数据是否有微信id
@@ -73,7 +86,7 @@ public class WchatMsgService {
                                 loginStart = "相较于昨日"+hitStr;
                                 wxJson.addData("k1","v1");
                                 wxJson.addData("k2","v2");
-
+                                senMsg.put("命中率",loginStart);
                             }else{
                                 // 错误提醒
                                 LOG.error("时间转换错误，请核对参数getTodayUser");
@@ -82,36 +95,42 @@ public class WchatMsgService {
                             loginStart = "昨日未登录。";
                             wxJson.addData("k3","v3");
                             wxJson.addData("k4","v4");
+                            senMsg.put("noLogin",loginStart);
                         }
                         //TODO 判断命中率是否低于行业标准
-                        Map<String, Integer> map = mathAll(list);
-                        int totalMsg = map.get("totalMsg");
-                        int totalInit = map.get("totalInit");
-                        int totalTime = map.get("totalTime");
-                        int totalSize = map.get("totalSize");
+                        Map<String, Object> map = mathAll(list);
+                        int totalMsg = (int)map.get("totalMsg");
+                        int totalInit = (int)map.get("totalInit");
+                        senMsg.put("全网命中总数",String.valueOf(totalInit));
+                        senMsg.put("全网捕获消息总数",String.valueOf(totalMsg));
+                        Double totalTime = (Double) map.get("totalTime");
+                        Integer totalSize = (Integer) map.get("totalSize");
                         // 平均时长
                         Double pvmtime = Double.valueOf(totalTime/totalSize);
                         // （平均）命中率
-                        int initAll = (int) (Double.valueOf(totalInit/totalMsg)*100);
+                        int initAll = (int) (Double.valueOf(totalInit)/Double.valueOf(totalMsg)*100);
                         int init = (int) (Double.valueOf(dataAll.getTodayHit())/Double.valueOf(dataAll.getTodayMsg())*100);
                         //命中率校验提示字段
                         String initmsg = "";
                         if(init>initAll){
-                            initmsg = "高于行业平均标准的"+(init-initAll)+"%";
+                            initmsg = "命中率高于行业平均标准的"+(init-initAll)+"%";
+
                         }else if(init<initAll){
-                            initmsg = "低于行业平均标准的"+(initAll-init)+"%";
+                            initmsg = "命中率低于行业平均标准的"+(initAll-init)+"%";
                         }
+                        senMsg.put("命中率",initmsg);
                         //更新库存
                         String updatGoose = "";
-                        if(StringUtils.isNotEmpty(dataAll.getTodayUpdate())){
+                        if(StringUtils.isNotEmpty(dataAll.getTodayUpdate()) && !StringUtils.equals("null",dataAll.getTodayUpdate())){
                             if(Integer.valueOf(dataAll.getTodayUpdate())>0){
                                 updatGoose = "今日更新库存"+dataAll.getTodayUpdate()+"条。";
                             }else{
                                 updatGoose = "今日未更新库存，请及时更新。";
                             }
                         }else{
-                            LOG.error("库存更新条数错误，请核对参数 todayUpdate");
+                            updatGoose = "今日未更新库存，请及时更新。";
                         }
+                        senMsg.put("更新库存",updatGoose);
                         //TODO 判断员工平均在线时长
                         String timeMsg = "";
                         if(StringUtils.isNotEmpty(dataAll.getHours())){
@@ -123,21 +142,25 @@ public class WchatMsgService {
                         String users = "此时，";
                         if(StringUtils.isNotEmpty(dataAll.getUsers())){
                             users += dataAll.getUsers()+"仍在使用配置宝卖力的工作，请酌情予以奖励。";
+                            senMsg.put("晚上八点还在线的用户",users);
                         }else{
                             LOG.error("当前使用用户异常，请检查数据类型是否正确");
                         }
+
                     }
+                    LOG.info("需要发送的练级为"+ JSONObject.toJSONString(wxJson));
                 }else{
                     //模板二业务
                     String msg2 = "";
                 }
                 //发送微信模板消息
-                boolean successYN = WechatMsg.pullMsg(wxJson.toString());
+                /*boolean successYN = WechatMsg.pullMsg(wxJson.toString());
                 if(successYN){
                     dataAll.setMsg_start("1");
                 }else{
                     dataAll.setMsg_start("0");
-                }
+                }*/
+                listall.add(senMsg);
             }else{
                 try {
                     String s = dataAll.toString();
@@ -150,6 +173,7 @@ public class WchatMsgService {
                 }
             }
         }
+        LOG.info(JSONObject.toJSONString(listall));
     }
 
 
@@ -188,28 +212,36 @@ public class WchatMsgService {
      * @param list
      * @return
      */
-    public Map<String,Integer> mathAll(List<DataAll> list){
-        Map<String,Integer> map = new HashMap<String,Integer>();
+    public Map<String,Object> mathAll(List<DataAll> list){
+        Map<String,Object> map = new HashMap<>();
         //捕获总条数
         Integer todayMsgTotal = 0;
         //命中条数
         Integer initTotal = 0;
         //总价值
-        Integer totalPrice = 0;
+        Double totalPrice = 0.0;
         //平均时长
-        Integer totalTime = 0;
+        Double totalTime = 0.0;
         Integer size = 0;
         for (DataAll data: list
              ) {
             if(StringUtils.isNotEmpty(data.getHours())){
-               if(Integer.valueOf(String.valueOf(StringUtils.isNotEmpty(data.getHours())))>0){
+               if(Double.valueOf(String.valueOf(data.getHours()))>0){
                    size += 1;
                }
             }
-            todayMsgTotal += Integer.valueOf(data.getTodayMsg());
-            initTotal += Integer.valueOf(data.getTodayHit());
-            totalPrice += Integer.valueOf(data.getTotalPrice());
-            totalTime += Integer.valueOf(data.getHours());
+            if(StringUtils.isNotEmpty(data.getTodayMsg()) && !StringUtils.equals("null",data.getTodayMsg())){
+                todayMsgTotal += Integer.valueOf(data.getTodayMsg());
+            }
+            if(StringUtils.isNotEmpty(data.getTodayHit()) && !StringUtils.equals("null",data.getTodayHit())){
+                initTotal += Integer.valueOf(data.getTodayHit());
+            }
+            if(StringUtils.isNotEmpty(data.getTotalPrice()) && !StringUtils.equals("null",data.getTotalPrice())){
+                totalPrice += Double.valueOf(data.getTotalPrice());
+            }
+            if(StringUtils.isNotEmpty(data.getHours()) && !StringUtils.equals("null",data.getHours())){
+                totalTime += Double.valueOf(data.getHours());
+            }
         }
         map.put("totalMsg",todayMsgTotal);
         map.put("totalInit",initTotal);

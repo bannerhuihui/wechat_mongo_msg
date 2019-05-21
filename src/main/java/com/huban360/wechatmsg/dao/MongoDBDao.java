@@ -88,6 +88,7 @@ public class MongoDBDao {
             dataAll.setLongestUser(String.valueOf(doc.get("longestUser")));
             dataAll.setHours(String.valueOf(doc.get("hours")));
             dataAll.setInsert_time(String.valueOf(doc.get("createTime")));
+            dataAll.setLoginMobile(String.valueOf(doc.get("loginMobile")));
             list.add(dataAll);
         }
         return list;

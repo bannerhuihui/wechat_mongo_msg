@@ -8,6 +8,7 @@
 package com.huban360.wechatmsg.util;
 
 import com.mongodb.MongoClient;
+import com.mongodb.MongoClientURI;
 import com.mongodb.client.MongoDatabase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,11 +31,9 @@ public class MongoManager {
      * @return
      */
     public static MongoDatabase getMongoDatabase(){
-        String mongodbIp = Util.getPropertyValue("mongo","mongodbIp");
-        String mongodbPort = Util.getPropertyValue("mongo","mongodbPort");
-        String mdataBase = Util.getPropertyValue("mongo","dataBase");
-        MongoClient mongoClient = new MongoClient(mongodbIp,Integer.valueOf(mongodbPort));
-        MongoDatabase db = mongoClient.getDatabase("futures");
+        MongoClientURI connectionString = new MongoClientURI("mongodb://mytest:mytest@192.168.1.241:27017/mytest");
+        MongoClient mongoClient = new MongoClient(connectionString);
+        MongoDatabase db = mongoClient.getDatabase("mytest");
         return db;
     }
 

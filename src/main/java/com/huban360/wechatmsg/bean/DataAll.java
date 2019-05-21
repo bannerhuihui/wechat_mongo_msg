@@ -31,7 +31,15 @@ public class DataAll {
     private String badweather_name;  //模板编号
     private String msg_start; // 发送状态
     private String insert_time; //插入时间
+    private String loginMobile;  //手机号
 
+    public String getLoginMobile() {
+        return loginMobile;
+    }
+
+    public void setLoginMobile(String loginMobile) {
+        this.loginMobile = loginMobile;
+    }
 
     public String getUsers() {
         return users;
